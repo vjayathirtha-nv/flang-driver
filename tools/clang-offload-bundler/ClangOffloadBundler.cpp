@@ -744,6 +744,8 @@ static FileHandler *CreateFileHandler(MemoryBuffer &FirstInput) {
     return new TextFileHandler(/*Comment=*/"//");
   if (FilesType == "ll")
     return new TextFileHandler(/*Comment=*/";");
+  if (FilesType == "f95")
+    return new TextFileHandler(/*Comment=*/"!");
   if (FilesType == "bc")
     return new BinaryFileHandler();
   if (FilesType == "s")

@@ -1048,10 +1048,38 @@ void CodeGenAction::ExecuteAction() {
     Ctx.setInlineAsmDiagnosticHandler(BitcodeInlineAsmDiagHandler,
                                       &CI.getDiagnostics());
 
+    const CodeGenOptions &CodeGenOpts = CI.getCodeGenOpts();
+    DiagnosticsEngine &Diags = CI.getDiagnostics();
+    std::unique_ptr<llvm::ToolOutputFile> OptRecordFile;
+
+    if (!CodeGenOpts.OptRecordFile.empty()) {
+      std::error_code EC;
+      OptRecordFile =
+        llvm::make_unique<llvm::ToolOutputFile>(CodeGenOpts.OptRecordFile,
+                                                EC, sys::fs::F_None);
+
+      if (EC) {
+        Diags.Report(diag::err_cannot_open_file) <<
+          CodeGenOpts.OptRecordFile << EC.message();
+        return;
+      }
+
+      Ctx.setRemarkStreamer(llvm::make_unique<RemarkStreamer>(
+          CodeGenOpts.OptRecordFile,
+          llvm::make_unique<remarks::YAMLSerializer>(OptRecordFile->os())));
+
+      if (CodeGenOpts.getProfileUse() != CodeGenOptions::ProfileNone)
+        Ctx.setDiagnosticsHotnessRequested(true);
+    }
+
     EmitBackendOutput(CI.getDiagnostics(), CI.getHeaderSearchOpts(),
                       CI.getCodeGenOpts(), TargetOpts, CI.getLangOpts(),
                       CI.getTarget().getDataLayout(), TheModule.get(), BA,
                       std::move(OS));
+
+    if (OptRecordFile)
+      OptRecordFile->keep();
+
     return;
   }
 
