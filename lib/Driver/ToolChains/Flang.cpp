@@ -767,6 +767,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("70"); LowerCmdArgs.push_back("0x8000");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("122"); LowerCmdArgs.push_back("1");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("125"); LowerCmdArgs.push_back("0x20000");
+  LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("164"); LowerCmdArgs.push_back("0x800000");
   LowerCmdArgs.push_back("-quad");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("59"); LowerCmdArgs.push_back("4");
   LowerCmdArgs.push_back("-tp"); LowerCmdArgs.push_back("px");
