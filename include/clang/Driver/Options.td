@@ -1367,7 +1367,7 @@ def fno_experimental_new_pass_manager : Flag<["-"], "fno-experimental-new-pass-m
   Group<f_clang_Group>, Flags<[CC1Option]>,
   HelpText<"Disables an experimental new pass manager in LLVM.">;
 def fveclib : Joined<["-"], "fveclib=">, Group<f_Group>, Flags<[CC1Option]>,
-    HelpText<"Use the given vector functions library">, Values<"Accelerate,SVML,none">;
+    HelpText<"Use the given vector functions library">, Values<"Accelerate,SVML,PGMATH,none">;
 def fno_lax_vector_conversions : Flag<["-"], "fno-lax-vector-conversions">, Group<f_Group>,
   HelpText<"Disallow implicit conversions between vectors with a different number of elements or different element types">, Flags<[CC1Option]>;
 def fno_merge_all_constants : Flag<["-"], "fno-merge-all-constants">, Group<f_Group>,
@@ -3058,6 +3058,16 @@ def Mfreeform_off: Flag<["-"], "Mnofreeform">, Group<fortran_format_Group>,
   HelpText<"Disable free-form format for Fortran">,
   Flags<[HelpHidden]>;
 
+def Minfo_EQ : CommaJoined<["-"], "Minfo=">,
+  HelpText<"Diagnostic information about successful optimizations">,
+  Values<"all,vect,inline">;
+def Minfoall : Flag<["-"], "Minfo">,
+  HelpText<"Diagnostic information about all successful optimizations">;
+def Mneginfo_EQ : CommaJoined<["-"], "Mneginfo=">,
+  HelpText<"Diagnostic information about missed optimizations">,
+  Values<"all,vect,inline">;
+def Mneginfoall : Flag<["-"], "Mneginfo">,
+  HelpText<"Diagnostic information about all missed optimizations">;
 def Mipa: Joined<["-"], "Mipa">, Group<pgi_fortran_Group>;
 def Mstackarrays: Joined<["-"], "Mstack_arrays">, Group<pgi_fortran_Group>;
 def pc: JoinedOrSeparate<["-"], "pc">, Group<pgi_fortran_Group>;
@@ -3131,6 +3141,8 @@ def no_fortran_main: Flag<["-"], "fno-fortran-main">, Group<gfortran_Group>,
   HelpText<"Don't link in Fortran main">;
 def Mnomain: Flag<["-"], "Mnomain">, Group<pgi_fortran_Group>,
   HelpText<"Don't link in Fortran main">;
+def frelaxed_math : Flag<["-"], "frelaxed-math">, Group<pgi_fortran_Group>,
+  HelpText<"Use relaxed Math intrinsic functions">;
 
 // Flang internal debug options
 def Mx_EQ : Joined<["-"], "Mx,">, Group<pgi_fortran_Group>;

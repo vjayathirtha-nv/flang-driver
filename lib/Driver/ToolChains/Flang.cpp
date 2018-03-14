@@ -46,7 +46,9 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList LowerCmdArgs;
   SmallString<256> Stem;
   std::string OutFile;
-  bool NeedIEEE = true;
+  bool NeedIEEE = false;
+  bool NeedFastMath = false;
+  bool NeedRelaxedMath = false;
 
   // Check number of inputs for sanity. We need at least one input.
   assert(Inputs.size() >= 1 && "Must have at least one input.");
@@ -76,55 +78,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
 
   /***** Process common args *****/
 
-  // Override IEEE mode if needed
-  if (Args.hasArg(options::OPT_Ofast) ||
-      Args.hasArg(options::OPT_ffast_math) ||
-      Args.hasArg(options::OPT_fno_fast_math) ||
-      Args.hasArg(options::OPT_Kieee_on) ||
-      Args.hasArg(options::OPT_Kieee_off)) {
-    auto A = Args.getLastArg(options::OPT_Ofast,
-                             options::OPT_ffast_math,
-                             options::OPT_fno_fast_math,
-                             options::OPT_Kieee_on,
-                             options::OPT_Kieee_off);
-    auto Opt = A->getOption();
-    if (Opt.matches(options::OPT_Ofast) ||
-        Opt.matches(options::OPT_ffast_math) ||
-        Opt.matches(options::OPT_Kieee_off)) {
-      NeedIEEE = false;
-    }
-  }
-
-  // -Kieee is on by default
-  if (!Args.hasArg(options::OPT_Kieee_off)) {
-    CommonCmdArgs.push_back("-y"); // Common: -y 129 2
-    CommonCmdArgs.push_back("129");
-    CommonCmdArgs.push_back("2");
-    // Lower: -x 6 0x100
-    LowerCmdArgs.push_back("-x");
-    LowerCmdArgs.push_back("6");
-    LowerCmdArgs.push_back("0x100");
-    // -x 42 0x400000
-    LowerCmdArgs.push_back("-x");
-    LowerCmdArgs.push_back("42");
-    LowerCmdArgs.push_back("0x400000");
-    // -y 129 4
-    LowerCmdArgs.push_back("-y");
-    LowerCmdArgs.push_back("129");
-    LowerCmdArgs.push_back("4");
-    // -x 129 0x400
-    LowerCmdArgs.push_back("-x");
-    LowerCmdArgs.push_back("129");
-    LowerCmdArgs.push_back("0x400");
-    for (auto Arg : Args.filtered(options::OPT_Kieee_on)) {
-      Arg->claim();
-    }
-  } else {
-    for (auto Arg : Args.filtered(options::OPT_Kieee_off)) {
-      Arg->claim();
-    }
-  }
-
+  
   // Add "inform level" flag
   if (Args.hasArg(options::OPT_Minform_EQ)) {
     // Parse arguments to set its value
@@ -261,6 +215,13 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
       CommonCmdArgs.push_back("-x");
       CommonCmdArgs.push_back("69");
       CommonCmdArgs.push_back("0x400");
+
+      // Disable use of native atomic instructions
+      // for OpenMP atomics pending either a named
+      // option or a libatomic bundled with flang.
+      UpperCmdArgs.push_back("-x");
+      UpperCmdArgs.push_back("69");
+      UpperCmdArgs.push_back("0x1000");
     }
   }
 
@@ -379,46 +340,6 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     UpperCmdArgs.push_back("0x10");
   }
 
-  // Set a -x flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hx_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-x");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
-  // Set a -y flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hy_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-y");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
-  // Set a -q (debug) flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hq_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-q");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
-  // Set a -qq (debug) flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hqq_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-qq");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
   // Pass an arbitrary flag for first part of Fortran frontend
   for (Arg *A : Args.filtered(options::OPT_Wh_EQ)) {
     A->claim();
@@ -506,22 +427,86 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     // pass -g to lower
     LowerCmdArgs.push_back("-debug");
   }
-
-  if (Arg *A = Args.getLastArg(options::OPT_ffast_math, options::OPT_fno_fast_math)) {
-    if (A->getOption().matches(options::OPT_ffast_math)) {
-      LowerCmdArgs.push_back("-x");
-    } else {
-      LowerCmdArgs.push_back("-y");
+  
+  /* Pick the last among conflicting flags, if a positive and negative flag
+     exists for ex. "-ffast-math -fno-fast-math" they get nullified. Also any
+     previously overwritten flag remains that way. 
+     For ex. "-Kieee -ffast-math -fno-fast-math". -Kieee gets overwritten by 
+     -ffast-math which then gets negated by -fno-fast-math, finally behaving as
+     if none of those flags were passed.
+  */
+  for(Arg *A: Args.filtered(options::OPT_ffast_math, options::OPT_fno_fast_math,
+                        options::OPT_Ofast, options::OPT_Kieee_off,
+                        options::OPT_Kieee_on, options::OPT_frelaxed_math)) {
+    if (A->getOption().matches(options::OPT_ffast_math) ||
+        A->getOption().matches(options::OPT_Ofast)) {
+      NeedIEEE = NeedRelaxedMath = false;
+      NeedFastMath = true;
+    } else if (A->getOption().matches(options::OPT_Kieee_on)) {
+      NeedFastMath = NeedRelaxedMath = false;
+      NeedIEEE = true;
+    } else if (A->getOption().matches(options::OPT_frelaxed_math)) {
+      NeedFastMath = NeedIEEE = false;
+      NeedRelaxedMath = true;
+    } else if (A->getOption().matches(options::OPT_fno_fast_math)) {
+      NeedFastMath = false;
+    } else if (A->getOption().matches(options::OPT_Kieee_off)) {
+      NeedIEEE = false;
     }
-    LowerCmdArgs.push_back("216");
-    LowerCmdArgs.push_back("1");
+    A->claim();
   }
 
-  // IEEE compatibility mode
-  LowerCmdArgs.push_back("-ieee");
-  if (NeedIEEE) {
+  if (NeedFastMath) {
+    // Lower: -x 216 1
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("216");
     LowerCmdArgs.push_back("1");
+    // Lower: -ieee 0
+    LowerCmdArgs.push_back("-ieee");
+    LowerCmdArgs.push_back("0");
+  } else if (NeedIEEE) {
+    // Common: -y 129 2
+    CommonCmdArgs.push_back("-y");
+    CommonCmdArgs.push_back("129");
+    CommonCmdArgs.push_back("2");
+    // Lower: -x 6 0x100
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("6");
+    LowerCmdArgs.push_back("0x100");
+    // Lower: -x 42 0x400000
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("42");
+    LowerCmdArgs.push_back("0x400000");
+    // Lower: -y 129 4
+    LowerCmdArgs.push_back("-y");
+    LowerCmdArgs.push_back("129");
+    LowerCmdArgs.push_back("4");
+    // Lower: -x 129 0x400
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("129");
+    LowerCmdArgs.push_back("0x400");
+    // Lower: -y 216 1 (OPT_fno_fast_math)
+    LowerCmdArgs.push_back("-y");
+    LowerCmdArgs.push_back("216");
+    LowerCmdArgs.push_back("1");
+    // Lower: -ieee 1
+    LowerCmdArgs.push_back("-ieee");
+    LowerCmdArgs.push_back("1");
+  } else if (NeedRelaxedMath) {
+    // Lower: -x 15 0x400
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("15");
+    LowerCmdArgs.push_back("0x400");
+    // Lower: -y 216 1 (OPT_fno_fast_math)
+    LowerCmdArgs.push_back("-y");
+    LowerCmdArgs.push_back("216");
+    LowerCmdArgs.push_back("1");
+    // Lower: -ieee 0
+    LowerCmdArgs.push_back("-ieee");
+    LowerCmdArgs.push_back("0");
   } else {
+    // Lower: -ieee 0
+    LowerCmdArgs.push_back("-ieee");
     LowerCmdArgs.push_back("0");
   }
 
@@ -538,6 +523,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   UpperCmdArgs.append(CommonCmdArgs.begin(), CommonCmdArgs.end()); // Append common arguments
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("19"); UpperCmdArgs.push_back("0x400000");
   UpperCmdArgs.push_back("-quad");
+  UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("68"); UpperCmdArgs.push_back("0x1");
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("59"); UpperCmdArgs.push_back("4");
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("15"); UpperCmdArgs.push_back("2");
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("49"); UpperCmdArgs.push_back("0x400004");
@@ -595,10 +581,24 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   // Enable preprocessor
   if (Args.hasArg(options::OPT_Mpreprocess) ||
       Args.hasArg(options::OPT_cpp) ||
+      Args.hasArg(options::OPT_E) ||
       types::getPreprocessedType(InputType) != types::TY_INVALID) {
     UpperCmdArgs.push_back("-preprocess");
-    for (auto Arg : Args.filtered(options::OPT_Mpreprocess, options::OPT_cpp)) {
+    for (auto Arg : Args.filtered(options::OPT_Mpreprocess, options::OPT_cpp, options::OPT_E)) {
       Arg->claim();
+    }
+
+    // When -E option is provided, run only the fortran preprocessor.
+    // Only in -E mode, consume -P if it exists
+    if (Args.hasArg(options::OPT_E)) {
+      UpperCmdArgs.push_back("-es");
+      // Line marker mode is disabled
+      if (Args.hasArg(options::OPT_P)) {
+        Args.ClaimAllArgs(options::OPT_P);
+      } else {
+        // -pp enables line marker mode in fortran preprocessor
+        UpperCmdArgs.push_back("-pp");
+      }
     }
   }
 
@@ -704,7 +704,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
         << A->getAsString(Args);
     }
   } else { // No argument passed
-    UpperCmdArgs.push_back("-y"); // Default is 1995
+    UpperCmdArgs.push_back("-x"); // Default is 03
   }
   UpperCmdArgs.push_back("54"); UpperCmdArgs.push_back("1"); // XBIT value
 
@@ -720,6 +720,46 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     for (auto Arg : Args.filtered(options::OPT_Mchkptr)) {
       Arg->claim();
     }
+  }
+
+  // Set a -x flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hx_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-x");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
+  }
+
+  // Set a -y flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hy_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-y");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
+  }
+
+  // Set a -q (debug) flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hq_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-q");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
+  }
+
+  // Set a -qq (debug) flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hqq_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-qq");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
   }
 
   const char * STBFile = Args.MakeArgString(Stem + ".stb");
@@ -742,8 +782,9 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
 
   C.addCommand(llvm::make_unique<Command>(JA, *this, UpperExec, UpperCmdArgs, Inputs));
 
-  // For -fsyntax-only that is it
-  if (Args.hasArg(options::OPT_fsyntax_only)) return;
+  // For -fsyntax-only or -E that is it
+  if (Args.hasArg(options::OPT_fsyntax_only) ||
+      Args.hasArg(options::OPT_E)) return;
 
   /***** Lower part of Fortran frontend *****/
 
@@ -755,6 +796,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-terse"); LowerCmdArgs.push_back("1");
   LowerCmdArgs.push_back("-inform"); LowerCmdArgs.push_back("warn");
   LowerCmdArgs.append(CommonCmdArgs.begin(), CommonCmdArgs.end()); // Append common arguments
+  LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("68"); LowerCmdArgs.push_back("0x1");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("51"); LowerCmdArgs.push_back("0x20");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("119"); LowerCmdArgs.push_back("0xa10000");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("122"); LowerCmdArgs.push_back("0x40");
@@ -767,6 +809,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("70"); LowerCmdArgs.push_back("0x8000");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("122"); LowerCmdArgs.push_back("1");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("125"); LowerCmdArgs.push_back("0x20000");
+  LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("164"); LowerCmdArgs.push_back("0x800000");
   LowerCmdArgs.push_back("-quad");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("59"); LowerCmdArgs.push_back("4");
   LowerCmdArgs.push_back("-tp"); LowerCmdArgs.push_back("px");
