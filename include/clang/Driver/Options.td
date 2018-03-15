@@ -3096,6 +3096,8 @@ def no_fortran_main: Flag<["-"], "fno-fortran-main">, Group<gfortran_Group>,
   HelpText<"Don't link in Fortran main">;
 def Mnomain: Flag<["-"], "Mnomain">, Group<pgi_fortran_Group>,
   HelpText<"Don't link in Fortran main">;
+def frelaxed_math : Flag<["-"], "frelaxed-math">, Group<pgi_fortran_Group>,
+  HelpText<"Use relaxed Math intrinsic functions">;
 
 // Flang internal debug options
 def Mx_EQ : Joined<["-"], "Mx,">, Group<pgi_fortran_Group>;

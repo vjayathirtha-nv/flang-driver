@@ -46,7 +46,9 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList LowerCmdArgs;
   SmallString<256> Stem;
   std::string OutFile;
-  bool NeedIEEE = true;
+  bool NeedIEEE = false;
+  bool NeedFastMath = false;
+  bool NeedRelaxedMath = false;
 
   // Check number of inputs for sanity. We need at least one input.
   assert(Inputs.size() >= 1 && "Must have at least one input.");
@@ -76,55 +78,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
 
   /***** Process common args *****/
 
-  // Override IEEE mode if needed
-  if (Args.hasArg(options::OPT_Ofast) ||
-      Args.hasArg(options::OPT_ffast_math) ||
-      Args.hasArg(options::OPT_fno_fast_math) ||
-      Args.hasArg(options::OPT_Kieee_on) ||
-      Args.hasArg(options::OPT_Kieee_off)) {
-    auto A = Args.getLastArg(options::OPT_Ofast,
-                             options::OPT_ffast_math,
-                             options::OPT_fno_fast_math,
-                             options::OPT_Kieee_on,
-                             options::OPT_Kieee_off);
-    auto Opt = A->getOption();
-    if (Opt.matches(options::OPT_Ofast) ||
-        Opt.matches(options::OPT_ffast_math) ||
-        Opt.matches(options::OPT_Kieee_off)) {
-      NeedIEEE = false;
-    }
-  }
-
-  // -Kieee is on by default
-  if (!Args.hasArg(options::OPT_Kieee_off)) {
-    CommonCmdArgs.push_back("-y"); // Common: -y 129 2
-    CommonCmdArgs.push_back("129");
-    CommonCmdArgs.push_back("2");
-    // Lower: -x 6 0x100
-    LowerCmdArgs.push_back("-x");
-    LowerCmdArgs.push_back("6");
-    LowerCmdArgs.push_back("0x100");
-    // -x 42 0x400000
-    LowerCmdArgs.push_back("-x");
-    LowerCmdArgs.push_back("42");
-    LowerCmdArgs.push_back("0x400000");
-    // -y 129 4
-    LowerCmdArgs.push_back("-y");
-    LowerCmdArgs.push_back("129");
-    LowerCmdArgs.push_back("4");
-    // -x 129 0x400
-    LowerCmdArgs.push_back("-x");
-    LowerCmdArgs.push_back("129");
-    LowerCmdArgs.push_back("0x400");
-    for (auto Arg : Args.filtered(options::OPT_Kieee_on)) {
-      Arg->claim();
-    }
-  } else {
-    for (auto Arg : Args.filtered(options::OPT_Kieee_off)) {
-      Arg->claim();
-    }
-  }
-
+  
   // Add "inform level" flag
   if (Args.hasArg(options::OPT_Minform_EQ)) {
     // Parse arguments to set its value
@@ -506,22 +460,82 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     // pass -g to lower
     LowerCmdArgs.push_back("-debug");
   }
-
-  if (Arg *A = Args.getLastArg(options::OPT_ffast_math, options::OPT_fno_fast_math)) {
-    if (A->getOption().matches(options::OPT_ffast_math)) {
-      LowerCmdArgs.push_back("-x");
-    } else {
-      LowerCmdArgs.push_back("-y");
+  
+  /* Pick the last among conflicting flags, if a positive and negative flag
+     exists for ex. "-ffast-math -fno-fast-math" they get nullified. Also any
+     previously overwritten flag remains that way. 
+     For ex. "-Kieee -ffast-math -fno-fast-math". -Kieee gets overwritten by 
+     -ffast-math which then gets negated by -fno-fast-math, finally behaving as
+     if none of those flags were passed.
+  */
+  for(Arg *A: Args.filtered(options::OPT_ffast_math, options::OPT_fno_fast_math,
+                        options::OPT_Ofast, options::OPT_Kieee_off,
+                        options::OPT_Kieee_on, options::OPT_frelaxed_math)) {
+    if (A->getOption().matches(options::OPT_ffast_math) ||
+        A->getOption().matches(options::OPT_Ofast)) {
+      NeedIEEE = NeedRelaxedMath = false;
+      NeedFastMath = true;
+    } else if (A->getOption().matches(options::OPT_Kieee_on)) {
+      NeedFastMath = NeedRelaxedMath = false;
+      NeedIEEE = true;
+    } else if (A->getOption().matches(options::OPT_frelaxed_math)) {
+      NeedFastMath = NeedIEEE = false;
+      NeedRelaxedMath = true;
+    } else if (A->getOption().matches(options::OPT_fno_fast_math)) {
+      NeedFastMath = false;
+    } else if (A->getOption().matches(options::OPT_Kieee_off)) {
+      NeedIEEE = false;
     }
-    LowerCmdArgs.push_back("216");
-    LowerCmdArgs.push_back("1");
+    A->claim();
   }
 
-  // IEEE compatibility mode
-  LowerCmdArgs.push_back("-ieee");
-  if (NeedIEEE) {
+  if (NeedFastMath) {
+    // Lower: -x 216 1
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("216");
     LowerCmdArgs.push_back("1");
-  } else {
+    // Lower: -ieee 0
+    LowerCmdArgs.push_back("-ieee");
+    LowerCmdArgs.push_back("0");
+  } else if (NeedIEEE) {
+    // Common: -y 129 2
+    CommonCmdArgs.push_back("-y");
+    CommonCmdArgs.push_back("129");
+    CommonCmdArgs.push_back("2");
+    // Lower: -x 6 0x100
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("6");
+    LowerCmdArgs.push_back("0x100");
+    // Lower: -x 42 0x400000
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("42");
+    LowerCmdArgs.push_back("0x400000");
+    // Lower: -y 129 4
+    LowerCmdArgs.push_back("-y");
+    LowerCmdArgs.push_back("129");
+    LowerCmdArgs.push_back("4");
+    // Lower: -x 129 0x400
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("129");
+    LowerCmdArgs.push_back("0x400");
+    // Lower: -y 216 1 (OPT_fno_fast_math)
+    LowerCmdArgs.push_back("-y");
+    LowerCmdArgs.push_back("216");
+    LowerCmdArgs.push_back("1");
+    // Lower: -ieee 1
+    LowerCmdArgs.push_back("-ieee");
+    LowerCmdArgs.push_back("1");
+  } else if (NeedRelaxedMath) {
+    // Lower: -x 15 0x400
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("15");
+    LowerCmdArgs.push_back("0x400");
+    // Lower: -y 216 1 (OPT_fno_fast_math)
+    LowerCmdArgs.push_back("-y");
+    LowerCmdArgs.push_back("216");
+    LowerCmdArgs.push_back("1");
+    // Lower: -ieee 0
+    LowerCmdArgs.push_back("-ieee");
     LowerCmdArgs.push_back("0");
   }
 
