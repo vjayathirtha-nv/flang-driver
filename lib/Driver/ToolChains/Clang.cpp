@@ -3286,7 +3286,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   else
     CmdArgs.push_back(Args.MakeArgString(getToolChain().getThreadModel()));
 
+#ifdef FLANG_LLVM_EXTENSIONS
+  if(Args.getLastArg(options::OPT_fveclib))
+    Args.AddLastArg(CmdArgs, options::OPT_fveclib);
+  else 
+    CmdArgs.push_back("-fveclib=PGMATH");
+#else
   Args.AddLastArg(CmdArgs, options::OPT_fveclib);
+#endif
 
   if (Args.hasFlag(options::OPT_fmerge_all_constants,
                    options::OPT_fno_merge_all_constants, false))
