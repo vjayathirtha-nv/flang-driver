@@ -537,6 +537,10 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     // Lower: -ieee 0
     LowerCmdArgs.push_back("-ieee");
     LowerCmdArgs.push_back("0");
+  } else {
+    // Lower: -ieee 0
+    LowerCmdArgs.push_back("-ieee");
+    LowerCmdArgs.push_back("0");
   }
 
   /***** Upper part of the Fortran frontend *****/
