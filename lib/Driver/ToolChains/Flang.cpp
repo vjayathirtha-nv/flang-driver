@@ -556,6 +556,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   UpperCmdArgs.append(CommonCmdArgs.begin(), CommonCmdArgs.end()); // Append common arguments
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("19"); UpperCmdArgs.push_back("0x400000");
   UpperCmdArgs.push_back("-quad");
+  UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("68"); UpperCmdArgs.push_back("0x1");
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("59"); UpperCmdArgs.push_back("4");
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("15"); UpperCmdArgs.push_back("2");
   UpperCmdArgs.push_back("-x"); UpperCmdArgs.push_back("49"); UpperCmdArgs.push_back("0x400004");
@@ -788,6 +789,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-terse"); LowerCmdArgs.push_back("1");
   LowerCmdArgs.push_back("-inform"); LowerCmdArgs.push_back("warn");
   LowerCmdArgs.append(CommonCmdArgs.begin(), CommonCmdArgs.end()); // Append common arguments
+  LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("68"); LowerCmdArgs.push_back("0x1");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("51"); LowerCmdArgs.push_back("0x20");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("119"); LowerCmdArgs.push_back("0xa10000");
   LowerCmdArgs.push_back("-x"); LowerCmdArgs.push_back("122"); LowerCmdArgs.push_back("0x40");
