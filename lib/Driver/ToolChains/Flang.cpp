@@ -215,6 +215,13 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
       CommonCmdArgs.push_back("-x");
       CommonCmdArgs.push_back("69");
       CommonCmdArgs.push_back("0x400");
+
+      // Disable use of native atomic instructions
+      // for OpenMP atomics pending either a named
+      // option or a libatomic bundled with flang.
+      UpperCmdArgs.push_back("-x");
+      UpperCmdArgs.push_back("69");
+      UpperCmdArgs.push_back("0x1000");
     }
   }
 
@@ -331,46 +338,6 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     UpperCmdArgs.push_back(fl);
     UpperCmdArgs.push_back("124");
     UpperCmdArgs.push_back("0x10");
-  }
-
-  // Set a -x flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hx_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-x");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
-  // Set a -y flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hy_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-y");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
-  // Set a -q (debug) flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hq_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-q");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
-  }
-
-  // Set a -qq (debug) flag for first part of Fortran frontend
-  for (Arg *A : Args.filtered(options::OPT_Hqq_EQ)) {
-    A->claim();
-    StringRef Value = A->getValue();
-    auto XFlag = Value.split(",");
-    UpperCmdArgs.push_back("-qq");
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
-    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
   }
 
   // Pass an arbitrary flag for first part of Fortran frontend
@@ -765,6 +732,46 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     for (auto Arg : Args.filtered(options::OPT_Mchkptr)) {
       Arg->claim();
     }
+  }
+
+  // Set a -x flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hx_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-x");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
+  }
+
+  // Set a -y flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hy_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-y");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
+  }
+
+  // Set a -q (debug) flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hq_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-q");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
+  }
+
+  // Set a -qq (debug) flag for first part of Fortran frontend
+  for (Arg *A : Args.filtered(options::OPT_Hqq_EQ)) {
+    A->claim();
+    StringRef Value = A->getValue();
+    auto XFlag = Value.split(",");
+    UpperCmdArgs.push_back("-qq");
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.first));
+    UpperCmdArgs.push_back(Args.MakeArgString(XFlag.second));
   }
 
   const char * STBFile = Args.MakeArgString(Stem + ".stb");
