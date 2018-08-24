@@ -2846,6 +2846,16 @@ def Mfreeform_off: Flag<["-"], "Mnofreeform">, Group<fortran_format_Group>,
   HelpText<"Disable free-form format for Fortran">,
   Flags<[HelpHidden]>;
 
+def Minfo_EQ : CommaJoined<["-"], "Minfo=">,
+  HelpText<"Diagnostic information about successful optimizations">,
+  Values<"all,vect,inline">;
+def Minfoall : Flag<["-"], "Minfo">,
+  HelpText<"Diagnostic information about all successful optimizations">;
+def Mneginfo_EQ : CommaJoined<["-"], "Mneginfo=">,
+  HelpText<"Diagnostic information about missed optimizations">,
+  Values<"all,vect,inline">;
+def Mneginfoall : Flag<["-"], "Mneginfo">,
+  HelpText<"Diagnostic information about all missed optimizations">;
 def Mipa: Joined<["-"], "Mipa">, Group<pgi_fortran_Group>;
 def Mstackarrays: Joined<["-"], "Mstack_arrays">, Group<pgi_fortran_Group>;
 def pc: JoinedOrSeparate<["-"], "pc">, Group<pgi_fortran_Group>;

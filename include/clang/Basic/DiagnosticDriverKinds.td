@@ -202,6 +202,8 @@ def warn_drv_omp_offload_target_duplicate : Warning<
   InGroup<OpenMPTarget>;
 def err_drv_bitcode_unsupported_on_toolchain : Error<
   "-fembed-bitcode is not supported on versions of iOS prior to 6.0">;
+def err_drv_clang_unsupported_minfo_arg : Error<
+  "'%0' option does not support '%1' value">;
 
 def warn_O4_is_O3 : Warning<"-O4 is equivalent to -O3">, InGroup<Deprecated>;
 def warn_drv_optimization_value : Warning<"optimization level '%0' is not supported; using '%1%2' instead">,
