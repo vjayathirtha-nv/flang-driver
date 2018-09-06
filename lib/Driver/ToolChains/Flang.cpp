@@ -716,7 +716,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
         << A->getAsString(Args);
     }
   } else { // No argument passed
-    UpperCmdArgs.push_back("-y"); // Default is 1995
+    UpperCmdArgs.push_back("-x"); // Default is 03
   }
   UpperCmdArgs.push_back("54"); UpperCmdArgs.push_back("1"); // XBIT value
 
