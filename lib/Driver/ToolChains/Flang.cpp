@@ -28,6 +28,7 @@
 #include "llvm/Support/Process.h"
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Support/YAMLParser.h"
+#include "llvm/Option/ArgList.h"
 
 #ifdef LLVM_ON_UNIX
 #include <unistd.h> // For getuid().
@@ -44,11 +45,13 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList CommonCmdArgs;
   ArgStringList UpperCmdArgs;
   ArgStringList LowerCmdArgs;
-  SmallString<256> Stem;
+  SmallString<256> Stem, Path;
   std::string OutFile;
   bool NeedIEEE = false;
   bool NeedFastMath = false;
   bool NeedRelaxedMath = false;
+
+  bool IsOpenMPDevice = JA.isDeviceOffloading(Action::OFK_OpenMP);
 
   // Check number of inputs for sanity. We need at least one input.
   assert(Inputs.size() >= 1 && "Must have at least one input.");
@@ -792,6 +795,22 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   UpperCmdArgs.push_back("-output");
   UpperCmdArgs.push_back(ILMFile);
 
+if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
+    SmallString<128> TargetInfo;
+    Path = llvm::sys::path::parent_path(Output.getFilename());
+    Arg* Tgts = Args.getLastArg(options::OPT_fopenmp_targets_EQ);
+    assert(Tgts && Tgts->getNumValues() &&
+           "OpenMP offloading has to have targets specified.");
+    for (unsigned i = 0; i < Tgts->getNumValues(); ++i) {
+      if (i)
+        TargetInfo += ',';
+      llvm::Triple T(Tgts->getValue(i));
+      TargetInfo += T.getTriple();
+    }
+    UpperCmdArgs.push_back("-fopenmp-targets");
+    UpperCmdArgs.push_back(Args.MakeArgString(TargetInfo.str()));
+  }
+
   C.addCommand(llvm::make_unique<Command>(JA, *this, UpperExec, UpperCmdArgs, Inputs));
 
   // For -fsyntax-only or -E that is it
@@ -899,7 +918,49 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-stbfile");
   LowerCmdArgs.push_back(STBFile);
 
-  LowerCmdArgs.push_back("-asm"); LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+
+  /* OpenMP GPU Offload */
+  if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
+    //if (isa<CompileJobAction>(JA) && JA.isHostOffloading(Action::OFK_OpenMP)) {
+    SmallString<128> TargetInfo;//("-fopenmp-targets ");
+    SmallString<256> TargetInfoAsm;//("-fopenmp-targets-asm ");
+    Path = llvm::sys::path::parent_path(Output.getFilename());
+
+    Arg* Tgts = Args.getLastArg(options::OPT_fopenmp_targets_EQ);
+    assert(Tgts && Tgts->getNumValues() &&
+           "OpenMP offloading has to have targets specified.");
+    for (unsigned i = 0; i < Tgts->getNumValues(); ++i) {
+      if (i)
+        TargetInfo += ',';
+      // We need to get the string from the triple because it may be not exactly
+      // the same as the one we get directly from the arguments.
+      llvm::Triple T(Tgts->getValue(i));
+      TargetInfo += T.getTriple();
+      // We also need to give a output file
+      TargetInfoAsm += Path;
+      TargetInfoAsm += "/";
+      TargetInfoAsm += Stem;
+      TargetInfoAsm += "-";
+      TargetInfoAsm += T.getTriple();
+      TargetInfoAsm += ".ll";
+    }
+    LowerCmdArgs.push_back("-fopenmp-targets");
+    LowerCmdArgs.push_back(Args.MakeArgString(TargetInfo.str()));
+    if(IsOpenMPDevice) {
+      LowerCmdArgs.push_back("-fopenmp-targets-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+      LowerCmdArgs.push_back("-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(TargetInfoAsm.str()));
+    } else {
+      LowerCmdArgs.push_back("-fopenmp-targets-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(TargetInfoAsm.str()));
+      LowerCmdArgs.push_back("-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+    }
+  } else {
+    LowerCmdArgs.push_back("-asm");
+    LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+  }
 
   C.addCommand(llvm::make_unique<Command>(JA, *this, LowerExec, LowerCmdArgs, Inputs));
 }
