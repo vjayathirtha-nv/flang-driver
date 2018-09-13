@@ -696,16 +696,10 @@ void CudaToolChain::AddFlangSystemIncludeArgs(const llvm::opt::ArgList &DriverAr
                                               llvm::opt::ArgStringList &Flang1Args) const {
   path_list IncludePathList;
   const Driver &D = getDriver();
-
-
   if (DriverArgs.hasArg(options::OPT_nostdinc))
     return;
-
-  {
     SmallString<128> P(D.InstalledDir);
     llvm::sys::path::append(P, "../include");
     IncludePathList.push_back(P.str());
-  }
-
   AddFlangSysIncludeArg(DriverArgs, Flang1Args, IncludePathList);
 }

@@ -28,7 +28,6 @@
 #include "llvm/Support/Process.h"
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Support/YAMLParser.h"
-#include "llvm/Option/ArgList.h"
 
 #ifdef LLVM_ON_UNIX
 #include <unistd.h> // For getuid().
@@ -45,7 +44,8 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList CommonCmdArgs;
   ArgStringList UpperCmdArgs;
   ArgStringList LowerCmdArgs;
-  SmallString<256> Stem, Path;
+  SmallString<256> Stem;
+  SmallString<256> Path;
   std::string OutFile;
   bool NeedIEEE = false;
   bool NeedFastMath = false;
@@ -921,7 +921,6 @@ if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
 
   /* OpenMP GPU Offload */
   if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
-    //if (isa<CompileJobAction>(JA) && JA.isHostOffloading(Action::OFK_OpenMP)) {
     SmallString<128> TargetInfo;//("-fopenmp-targets ");
     SmallString<256> TargetInfoAsm;//("-fopenmp-targets-asm ");
     Path = llvm::sys::path::parent_path(Output.getFilename());
@@ -929,10 +928,10 @@ if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
     Arg* Tgts = Args.getLastArg(options::OPT_fopenmp_targets_EQ);
     assert(Tgts && Tgts->getNumValues() &&
            "OpenMP offloading has to have targets specified.");
-    for (unsigned i = 0; i < Tgts->getNumValues(); ++i) {
+    for (unsigned i = 0; i != Tgts->getNumValues(); ++i) {
       if (i)
         TargetInfo += ',';
-      // We need to get the string from the triple because it may be not exactly
+      // We need to get the string from the triple because it may not be exactly
       // the same as the one we get directly from the arguments.
       llvm::Triple T(Tgts->getValue(i));
       TargetInfo += T.getTriple();
