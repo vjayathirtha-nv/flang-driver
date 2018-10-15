@@ -45,7 +45,6 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList UpperCmdArgs;
   ArgStringList LowerCmdArgs;
   SmallString<256> Stem;
-  SmallString<256> Path;
   std::string OutFile;
   bool NeedIEEE = false;
   bool NeedFastMath = false;
@@ -53,8 +52,6 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
 
   // Check number of inputs for sanity. We need at least one input.
   assert(Inputs.size() >= 1 && "Must have at least one input.");
-
-  bool IsOpenMPDevice = JA.isDeviceOffloading(Action::OFK_OpenMP);
 
   /***** Process file arguments to both parts *****/
   const InputInfo &Input = Inputs[0];
@@ -795,6 +792,7 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   UpperCmdArgs.push_back("-output");
   UpperCmdArgs.push_back(ILMFile);
 
+  SmallString<256> Path;
   if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
     SmallString<128> TargetInfo;
     Path = llvm::sys::path::parent_path(Output.getFilename());
@@ -918,12 +916,13 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-stbfile");
   LowerCmdArgs.push_back(STBFile);
 
+  Path = llvm::sys::path::parent_path(Output.getFilename());
+  bool IsOpenMPDevice = JA.isDeviceOffloading(Action::OFK_OpenMP);
+
   /* OpenMP GPU Offload */
   if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
-    //if (isa<CompileJobAction>(JA) && JA.isHostOffloading(Action::OFK_OpenMP)) {
     SmallString<128> TargetInfo;//("-fopenmp-targets ");
     SmallString<256> TargetInfoAsm;//("-fopenmp-targets-asm ");
-    Path = llvm::sys::path::parent_path(Output.getFilename());
 
     Arg* Tgts = Args.getLastArg(options::OPT_fopenmp_targets_EQ);
     assert(Tgts && Tgts->getNumValues() &&
@@ -943,6 +942,9 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
       TargetInfoAsm += T.getTriple();
       TargetInfoAsm += ".ll";
     }
+    // The driver is aware that flang2 can generate multiple files at the same time.
+    // We mimic it here by exchanging the output files.
+    // The driver always uses the output file of -asm.
     LowerCmdArgs.push_back("-fopenmp-targets");
     LowerCmdArgs.push_back(Args.MakeArgString(TargetInfo.str()));
     if(IsOpenMPDevice) {
