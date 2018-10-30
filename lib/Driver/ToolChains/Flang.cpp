@@ -792,6 +792,23 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   UpperCmdArgs.push_back("-output");
   UpperCmdArgs.push_back(ILMFile);
 
+  SmallString<256> Path;
+  if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
+    SmallString<128> TargetInfo;
+    Path = llvm::sys::path::parent_path(Output.getFilename());
+    Arg* Tgts = Args.getLastArg(options::OPT_fopenmp_targets_EQ);
+    assert(Tgts && Tgts->getNumValues() &&
+           "OpenMP offloading has to have targets specified.");
+    for (unsigned i = 0; i < Tgts->getNumValues(); ++i) {
+      if (i)
+        TargetInfo += ',';
+      llvm::Triple T(Tgts->getValue(i));
+      TargetInfo += T.getTriple();
+    }
+    UpperCmdArgs.push_back("-fopenmp-targets");
+    UpperCmdArgs.push_back(Args.MakeArgString(TargetInfo.str()));
+  }
+
   C.addCommand(llvm::make_unique<Command>(JA, *this, UpperExec, UpperCmdArgs, Inputs));
 
   // For -fsyntax-only or -E that is it
@@ -899,7 +916,52 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back("-stbfile");
   LowerCmdArgs.push_back(STBFile);
 
-  LowerCmdArgs.push_back("-asm"); LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+  Path = llvm::sys::path::parent_path(Output.getFilename());
+  bool IsOpenMPDevice = JA.isDeviceOffloading(Action::OFK_OpenMP);
+
+  /* OpenMP GPU Offload */
+  if(Args.getAllArgValues(options::OPT_fopenmp_targets_EQ).size() > 0) {
+    SmallString<128> TargetInfo;//("-fopenmp-targets ");
+    SmallString<256> TargetInfoAsm;//("-fopenmp-targets-asm ");
+
+    Arg* Tgts = Args.getLastArg(options::OPT_fopenmp_targets_EQ);
+    assert(Tgts && Tgts->getNumValues() &&
+           "OpenMP offloading has to have targets specified.");
+    for (unsigned i = 0; i < Tgts->getNumValues(); ++i) {
+      if (i)
+        TargetInfo += ',';
+      // We need to get the string from the triple because it may be not exactly
+      // the same as the one we get directly from the arguments.
+      llvm::Triple T(Tgts->getValue(i));
+      TargetInfo += T.getTriple();
+      // We also need to give a output file
+      TargetInfoAsm += Path;
+      TargetInfoAsm += "/";
+      TargetInfoAsm += Stem;
+      TargetInfoAsm += "-";
+      TargetInfoAsm += T.getTriple();
+      TargetInfoAsm += ".ll";
+    }
+    // The driver is aware that flang2 can generate multiple files at the same time.
+    // We mimic it here by exchanging the output files.
+    // The driver always uses the output file of -asm.
+    LowerCmdArgs.push_back("-fopenmp-targets");
+    LowerCmdArgs.push_back(Args.MakeArgString(TargetInfo.str()));
+    if(IsOpenMPDevice) {
+      LowerCmdArgs.push_back("-fopenmp-targets-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+      LowerCmdArgs.push_back("-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(TargetInfoAsm.str()));
+    } else {
+      LowerCmdArgs.push_back("-fopenmp-targets-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(TargetInfoAsm.str()));
+      LowerCmdArgs.push_back("-asm");
+      LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+    }
+  } else {
+    LowerCmdArgs.push_back("-asm");
+    LowerCmdArgs.push_back(Args.MakeArgString(OutFile));
+  }
 
   C.addCommand(llvm::make_unique<Command>(JA, *this, LowerExec, LowerCmdArgs, Inputs));
 }
