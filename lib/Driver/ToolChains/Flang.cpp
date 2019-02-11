@@ -427,8 +427,8 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   unsigned OptLevel = std::stoi(OptOStr.str());
 
   if (Args.hasArg(options::OPT_g_Group)) {
-    // pass -g to lower
-    LowerCmdArgs.push_back("-debug");
+    // pass -g to lower and upper
+    CommonCmdArgs.push_back("-debug");
   }
   
   /* Pick the last among conflicting flags, if a positive and negative flag
