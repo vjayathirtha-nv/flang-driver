@@ -79,6 +79,18 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   LowerCmdArgs.push_back(ILMFile);
   C.addTempFile(ILMFile);
 
+  // Generate -cmdline
+  std::string CmdLine("'+flang");
+  // ignore the first argument which reads "--driver-mode=fortran" 
+  for (unsigned i = 1; i < Args.getNumInputArgStrings(); ++i) {
+    CmdLine.append(" ");
+    CmdLine.append(Args.getArgString(i));
+  }
+  CmdLine.append("'");
+
+  CommonCmdArgs.push_back("-cmdline");
+  CommonCmdArgs.push_back(Args.MakeArgString(CmdLine));
+
   /***** Process common args *****/
 
   
