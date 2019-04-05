@@ -137,6 +137,14 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     CommonCmdArgs.push_back("0x400");
   }
 
+  // Store constants in writable data segment
+  for (auto Arg : Args.filtered(options::OPT_Mwritable_constants)) {
+    Arg->claim();
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("183");
+    LowerCmdArgs.push_back("0x20000000");
+  }
+
   // Bounds checking: On
   for (auto Arg : Args.filtered(options::OPT_Mbounds_on)) {
     Arg->claim();
