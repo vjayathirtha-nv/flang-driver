@@ -286,6 +286,14 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     CommonCmdArgs.push_back("8");
   }
 
+  // -Memit-dwarf-common-blocks-name, only add xbit to flang2.
+  for (auto Arg : Args.filtered(options::OPT_Memit_dwarf_common_blocks_name)) {
+    Arg->claim();
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("183");
+    LowerCmdArgs.push_back("0x40000000");
+  }
+
   // -g should produce DWARFv2
   for (auto Arg : Args.filtered(options::OPT_g_Flag)) {
     Arg->claim();
