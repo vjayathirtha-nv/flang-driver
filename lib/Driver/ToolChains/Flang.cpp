@@ -12,13 +12,18 @@
 #include "InputInfo.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/MacroBuilder.h"
 #include "clang/Basic/ObjCRuntime.h"
+#include "clang/Basic/TargetInfo.h"
+#include "clang/Basic/TargetOptions.h"
 #include "clang/Basic/Version.h"
 #include "clang/Config/config.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "clang/Driver/XRayArgs.h"
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/Utils.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/CodeGen.h"
@@ -37,6 +42,19 @@ using namespace clang::driver;
 using namespace clang::driver::tools;
 using namespace clang;
 using namespace llvm::opt;
+
+class FlangMacroBuilder : public MacroBuilder {
+  ArgStringList &CmdArgs;
+  const ArgList &DriverArgs;
+  public:
+    FlangMacroBuilder(ArgStringList &UpperCmdArgs, const ArgList &DriverArgs, llvm::raw_string_ostream &Output)
+      : MacroBuilder(Output), CmdArgs(UpperCmdArgs), DriverArgs(DriverArgs) {
+    }
+    virtual void defineMacro(const Twine &Name, const Twine &Value = "1") {
+      CmdArgs.push_back("-def");
+      CmdArgs.push_back(DriverArgs.MakeArgString(Name + Twine('=') + Value));
+    }
+};
 
 void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output, const InputInfoList &Inputs,
@@ -613,27 +631,51 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
   // Add system include arguments.
   getToolChain().AddFlangSystemIncludeArgs(Args, UpperCmdArgs);
 
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("unix");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__unix");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__unix__");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("linux");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__linux");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__linux__");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__NO_MATH_INLINES");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__LP64__");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__LONG_MAX__=9223372036854775807L");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__SIZE_TYPE__=unsigned long int");
-  UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__PTRDIFF_TYPE__=long int");
+  // Use clang's predefined macros
+  DiagnosticsEngine DE(new DiagnosticIDs(), new DiagnosticOptions, new IgnoringDiagConsumer());
+  std::shared_ptr<clang::TargetOptions> TO = std::make_shared<clang::TargetOptions>();
+  TO->Triple = getToolChain().getEffectiveTriple().getTriple();
+  std::shared_ptr<TargetInfo> TI(clang::TargetInfo::CreateTargetInfo(DE, TO));
+  std::string PredefineBuffer;
+  llvm::raw_string_ostream Predefines(PredefineBuffer);
+  FlangMacroBuilder Builder(UpperCmdArgs, Args, Predefines);
+
+  LangOptions LO;
+  VersionTuple VT = getToolChain().computeMSVCVersion(&getToolChain().getDriver(), Args);
+  if (!VT.empty()) {
+    // Set the MSCompatibility version. Subminor version has 5 decimal digits.
+    // Minor and major versions have 2 decimal digits each.
+    LO.MSCompatibilityVersion = VT.getMajor() * 10000000 +
+                                VT.getMinor().getValueOr(0) * 100000 +
+                                VT.getSubminor().getValueOr(0);
+  }
+
+  // Define Target specific macros like __linux__
+  TI->getTargetDefines(LO, Builder);
+
+  Builder.defineMacro("__SIZE_TYPE__", TargetInfo::getTypeName(TI->getSizeType()));
+  Builder.defineMacro("__PTRDIFF_TYPE__", TargetInfo::getTypeName(TI->getPtrDiffType(0)));
+
+  if (TI->getPointerWidth(0) == 64 && TI->getLongWidth() == 64
+      && TI->getIntWidth() == 32) {
+    Builder.defineMacro("_LP64");
+    Builder.defineMacro("__LP64__");
+  }
+
+  if (TI->getPointerWidth(0) == 32 && TI->getLongWidth() == 32
+      && TI->getIntWidth() == 32) {
+    Builder.defineMacro("_ILP32");
+    Builder.defineMacro("__ILP32__");
+  }
+
+  DefineTypeSize("__LONG_MAX__", TargetInfo::SignedLong, *TI, Builder);
+
+  // Add additional predefined macros
   switch (getToolChain().getEffectiveTriple().getArch()) {
   case llvm::Triple::aarch64:
-    UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__aarch64");
-    UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__aarch64__");
-    UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__ARM_ARCH=8");
     UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__ARM_ARCH__=8");
     break;
   case llvm::Triple::x86_64:
-    UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__x86_64");
-    UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__x86_64__");
     UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__amd_64__amd64__");
     UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__k8");
     UpperCmdArgs.push_back("-def"); UpperCmdArgs.push_back("__k8__");

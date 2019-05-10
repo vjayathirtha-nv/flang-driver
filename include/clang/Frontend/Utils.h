@@ -16,6 +16,7 @@
 
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/LLVM.h"
+#include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/VirtualFileSystem.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -54,10 +55,12 @@ class FrontendOptions;
 class HeaderSearch;
 class HeaderSearchOptions;
 class LangOptions;
+class MacroBuilder;
 class PCHContainerReader;
 class Preprocessor;
 class PreprocessorOptions;
 class PreprocessorOutputOptions;
+class StringRef;
 
 /// Apply the header search options to get given HeaderSearch object.
 void ApplyHeaderSearchOptions(HeaderSearch &HS,
@@ -70,6 +73,17 @@ void ApplyHeaderSearchOptions(HeaderSearch &HS,
 void InitializePreprocessor(Preprocessor &PP, const PreprocessorOptions &PPOpts,
                             const PCHContainerReader &PCHContainerRdr,
                             const FrontendOptions &FEOpts);
+
+/// DefineTypeSize - An overloaded helper that uses TargetInfo to determine
+/// the width, suffix, and signedness of the given type
+void DefineTypeSize(const Twine &MacroName, TargetInfo::IntType Ty,
+                    const TargetInfo &TI, MacroBuilder &Builder);
+
+/// DefineTypeSize - Emit a macro to the predefines buffer that declares a macro
+/// named MacroName with the max value for a type with width 'TypeWidth' a
+/// signedness of 'isSigned' and with a value suffix of 'ValSuffix' (e.g. LL).
+void DefineTypeSize(const Twine &MacroName, unsigned TypeWidth,
+                    StringRef ValSuffix, bool isSigned, MacroBuilder &Builder);
 
 /// DoPrintPreprocessedInput - Implement -E mode.
 void DoPrintPreprocessedInput(Preprocessor &PP, raw_ostream *OS,
