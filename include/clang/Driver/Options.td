@@ -3092,6 +3092,8 @@ def Mpreprocess : Flag<["-"], "Mpreprocess">, Group<pgi_fortran_Group>,
 def Mstandard: Flag<["-"], "Mstandard">, Group<pgi_fortran_Group>,
   HelpText<"Check Fortran standard conformance">;
 def Mchkptr: Flag<["-"], "Mchkptr">, Group<pgi_fortran_Group>;
+def Mwritable_constants: Flag<["-"], "Mwritable-constants">, Group<pgi_fortran_Group>,
+  HelpText<"Store constants in the writable data segment">;
 defm Minline: BooleanMFlag<"inline">, Group<pgi_fortran_Group>;
 def fma: Flag<["-"], "fma">, Group<pgi_fortran_Group>,
   HelpText<"Enable generation of FMA instructions">;
