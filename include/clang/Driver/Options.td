@@ -3147,6 +3147,8 @@ def frelaxed_math : Flag<["-"], "frelaxed-math">, Group<pgi_fortran_Group>,
   HelpText<"Use relaxed Math intrinsic functions">;
 def Memit_dwarf_common_blocks_name: Flag<["-"], "Memit-dwarf-common-blocks-name">,
   Group<pgi_fortran_Group>, HelpText<"Emit COMMON blocks name in DWARF">;
+def Munixlogical: Flag<["-"], "Munixlogical">, Group<pgi_fortran_Group>,
+  HelpText<"Use unixlogical for all loigical operations">;
 
 // Flang internal debug options
 def Mx_EQ : Joined<["-"], "Mx,">, Group<pgi_fortran_Group>;

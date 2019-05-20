@@ -302,6 +302,14 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     LowerCmdArgs.push_back("0x40000000");
   }
 
+  // -Munixlogical, only add xbit to flang2.
+  for (auto Arg : Args.filtered(options::OPT_Munixlogical)) {
+    Arg->claim();
+    LowerCmdArgs.push_back("-x");
+    LowerCmdArgs.push_back("125");
+    LowerCmdArgs.push_back("0x8");
+  }
+
   // -g should produce DWARFv2
   for (auto Arg : Args.filtered(options::OPT_g_Flag)) {
     Arg->claim();
