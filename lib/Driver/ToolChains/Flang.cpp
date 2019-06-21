@@ -535,8 +535,8 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     LowerCmdArgs.push_back("216");
     LowerCmdArgs.push_back("1");
     // Lower: -ieee 0
-    LowerCmdArgs.push_back("-ieee");
-    LowerCmdArgs.push_back("0");
+    CommonCmdArgs.push_back("-ieee");
+    CommonCmdArgs.push_back("0");
   } else if (NeedIEEE) {
     // Common: -y 129 2
     CommonCmdArgs.push_back("-y");
@@ -563,8 +563,8 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     LowerCmdArgs.push_back("216");
     LowerCmdArgs.push_back("1");
     // Lower: -ieee 1
-    LowerCmdArgs.push_back("-ieee");
-    LowerCmdArgs.push_back("1");
+    CommonCmdArgs.push_back("-ieee");
+    CommonCmdArgs.push_back("1");
   } else if (NeedRelaxedMath) {
     // Lower: -x 15 0x400
     LowerCmdArgs.push_back("-x");
@@ -575,12 +575,12 @@ void FlangFrontend::ConstructJob(Compilation &C, const JobAction &JA,
     LowerCmdArgs.push_back("216");
     LowerCmdArgs.push_back("1");
     // Lower: -ieee 0
-    LowerCmdArgs.push_back("-ieee");
-    LowerCmdArgs.push_back("0");
+    CommonCmdArgs.push_back("-ieee");
+    CommonCmdArgs.push_back("0");
   } else {
     // Lower: -ieee 0
-    LowerCmdArgs.push_back("-ieee");
-    LowerCmdArgs.push_back("0");
+    CommonCmdArgs.push_back("-ieee");
+    CommonCmdArgs.push_back("0");
   }
 
   /***** Upper part of the Fortran frontend *****/
