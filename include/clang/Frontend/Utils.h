@@ -34,6 +34,7 @@
 namespace llvm {
 
 class Triple;
+class StringRef;
 
 namespace opt {
 
@@ -60,7 +61,7 @@ class PCHContainerReader;
 class Preprocessor;
 class PreprocessorOptions;
 class PreprocessorOutputOptions;
-class StringRef;
+
 
 /// Apply the header search options to get given HeaderSearch object.
 void ApplyHeaderSearchOptions(HeaderSearch &HS,
@@ -74,20 +75,32 @@ void InitializePreprocessor(Preprocessor &PP, const PreprocessorOptions &PPOpts,
                             const PCHContainerReader &PCHContainerRdr,
                             const FrontendOptions &FEOpts);
 
-/// DefineTypeSize - An overloaded helper that uses TargetInfo to determine
-/// the width, suffix, and signedness of the given type
-void DefineTypeSize(const Twine &MacroName, TargetInfo::IntType Ty,
-                    const TargetInfo &TI, MacroBuilder &Builder);
+/// DoPrintPreprocessedInput - Implement -E mode.
+void DoPrintPreprocessedInput(Preprocessor &PP, raw_ostream *OS,
+                              const PreprocessorOutputOptions &Opts);
 
 /// DefineTypeSize - Emit a macro to the predefines buffer that declares a macro
 /// named MacroName with the max value for a type with width 'TypeWidth' a
 /// signedness of 'isSigned' and with a value suffix of 'ValSuffix' (e.g. LL).
-void DefineTypeSize(const Twine &MacroName, unsigned TypeWidth,
-                    StringRef ValSuffix, bool isSigned, MacroBuilder &Builder);
+template<typename T>
+static void DefineTypeSize(const Twine &MacroName, unsigned TypeWidth,
+                           StringRef ValSuffix, bool isSigned,
+                           T &Builder) {
+  static_assert(std::is_base_of<MacroBuilder, T>::value, "Illegal T value");
+  llvm::APInt MaxVal = isSigned ? llvm::APInt::getSignedMaxValue(TypeWidth)
+                                : llvm::APInt::getMaxValue(TypeWidth);
+  Builder.defineMacro(MacroName, MaxVal.toString(10, isSigned) + ValSuffix);
+}
 
-/// DoPrintPreprocessedInput - Implement -E mode.
-void DoPrintPreprocessedInput(Preprocessor &PP, raw_ostream *OS,
-                              const PreprocessorOutputOptions &Opts);
+/// DefineTypeSize - An overloaded helper that uses TargetInfo to determine
+/// the width, suffix, and signedness of the given type
+template<typename T>
+static void DefineTypeSize(const Twine &MacroName, TargetInfo::IntType Ty,
+                           const TargetInfo &TI, T &Builder) {
+  static_assert(std::is_base_of<MacroBuilder, T>::value, "Illegal T value");
+  DefineTypeSize(MacroName, TI.getTypeWidth(Ty), TI.getTypeConstantSuffix(Ty),
+                 TI.isTypeSigned(Ty), Builder);
+}
 
 /// An interface for collecting the dependencies of a compilation. Users should
 /// use \c attachToPreprocessor and \c attachToASTReader to get all of the
